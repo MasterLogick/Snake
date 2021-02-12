@@ -171,7 +171,7 @@ public class Server extends Thread {
         public void run() {
             while (alive) {
                 try {
-                    byte kbEvent = readKBEvent();
+                    byte kbEvent = (byte) (readKBEvent() & 0b11111011);
                     if (kbEvent == DEATH_SIGNAL) {
                         synchronized (deathList) {
                             deathList.add(user.getId());
@@ -182,7 +182,8 @@ public class Server extends Thread {
                         return;
                     } else if (nextSignal.containsKey(user.getId())) {
                         LinkedList<Byte> sigList = nextSignal.get(user.getId());
-                        if (sigList.isEmpty() || sigList.getLast() != kbEvent)
+                        if ((sigList.isEmpty() && user.getSnake().getLastSignal() != (byte) ((kbEvent & 0b01111111) | ((~kbEvent) & 0b10000000)))
+                                || (!sigList.isEmpty() && sigList.getLast() != (byte) ((kbEvent & 0b01111111) | ((~kbEvent) & 0b10000000))))
                             sigList.addLast(kbEvent);
                         if (sigList.size() > UPDATE_SIGNAL) sigList.removeFirst();
                     }
