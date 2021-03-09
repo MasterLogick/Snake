@@ -1,9 +1,8 @@
 package net.ddns.masterlogick;
 
 import java.awt.*;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
@@ -14,16 +13,18 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class Server extends Thread {
-    public static final byte NEW_USER_SIGNAL = 12;
-    public static final byte DEATH_SIGNAL = 13;
-    public static final byte UPDATE_SIGNAL = 14;
-    public static final byte APPLE_SIGNAL = 15;
+    public static final byte NEW_USER_SIGNAL = 50;
+    public static final byte DEATH_SIGNAL = 51;
+    public static final byte UPDATE_SIGNAL = 52;
+    public static final byte APPLE_SIGNAL = 53;
+    public static final byte BAN_SIGNAL = 54;
     private static final Logger log = Logger.getGlobal();
     private final int port;
     private final int rows;
     private final int columns;
     private final Random r = new Random();
     private final ArrayList<Integer> deathList = new ArrayList<>();
+    private final ArrayList<InetAddress> banList = new ArrayList<>();
     private final int ups;
     Vector<Handler> clients = new Vector<>();
     HashMap<Integer, LinkedList<Byte>> nextSignal = new HashMap<>();
@@ -51,37 +52,43 @@ public class Server extends Thread {
                         update.putInt(clients.size());
                         for (int i = 0; i < nextSignal.size(); i++) {
                             Handler h = clients.get(i);
-                            Snake s = h.user.getSnake();
-                            byte signal;
-                            byte nextSig = nextSignal.get(h.user.getId()).isEmpty() ? s.getLastSignal() : nextSignal.get(h.user.getId()).removeFirst();
-                            if ((s.getLastSignal() & 0b11) == (nextSig & 0b11) &&
-                                    ((nextSig ^ s.getLastSignal()) & 0b10000000) == 0) {
-                                signal = s.getLastSignal();
-                            } else {
-                                signal = nextSig;
-                            }
-                            update.putInt(h.user.getId());
-                            byte upd = s.go(signal, rows, columns, apple);
-                            updateApple = updateApple || ((upd & 0b100) != 0);
-                            update.put(upd);
-                            AtomicBoolean intersect = new AtomicBoolean(false);
-                            clients.forEach(handler -> {
-                                if (handler != h)
-                                    intersect.set(intersect.get() || handler.getUser().getSnake().contains(h.user.getSnake().start.x, h.user.getSnake().start.y));
-                            });
-                            if (upd == 0 || intersect.get()) {
-                                deathList.add(h.user.getId());
-                                log.log(Level.INFO, "User " + h.user.getId() + " died");
-                            }
+                            if (!h.s.isClosed()) {
+                                Snake s = h.user.getSnake();
+                                byte signal;
+                                byte nextSig = nextSignal.get(h.user.getId()).isEmpty() ? s.getLastSignal() : nextSignal.get(h.user.getId()).removeFirst();
+                                if ((s.getLastSignal() & 0b11) == (nextSig & 0b11) &&
+                                        ((nextSig ^ s.getLastSignal()) & 0b10000000) == 0) {
+                                    signal = s.getLastSignal();
+                                } else {
+                                    signal = nextSig;
+                                }
+                                update.putInt(h.user.getId());
+                                byte upd = s.go(signal, rows, columns, apple);
+                                updateApple = updateApple || ((upd & 0b100) != 0);
+                                update.put(upd);
+                                AtomicBoolean intersect = new AtomicBoolean(false);
+                                clients.forEach(handler -> {
+                                    if (handler != h)
+                                        intersect.set(intersect.get() || handler.getUser().getSnake().contains(h.user.getSnake().start.x, h.user.getSnake().start.y));
+                                });
+                                if (upd == 0 || intersect.get()) {
+                                    deathList.add(h.user.getId());
+                                    log.log(Level.INFO, "User " + h.user.getId() + " died");
+                                }
+                            } else deathList.add(h.user.getId());
                         }
                         if (updateApple) apple = new Point(r.nextInt(rows), r.nextInt(columns));
                         ArrayList<Integer> disconnected = new ArrayList<>();
                         for (Handler handler : clients) {
-                            try {
-                                handler.sendUpdate(update, deathList);
-                                if (updateApple) handler.sendAppleUpdateSignal(apple);
-                            } catch (IOException e) {
-                                disconnected.add(handler.getUser().getId());
+                            if (!handler.s.isClosed()) {
+                                try {
+                                    handler.sendUpdate(update, deathList);
+                                    if (updateApple) handler.sendAppleUpdateSignal(apple);
+                                } catch (IOException e) {
+                                    disconnected.add(handler.getUser().getId());
+                                }
+                            } else {
+                                disconnected.add(handler.user.getId());
                             }
                         }
                         deathList.forEach(id -> nextSignal.remove(id));
@@ -98,9 +105,47 @@ public class Server extends Thread {
             });
             gameCycle.setDaemon(true);
             gameCycle.start();
+            Thread banThread = new Thread(() -> {
+                BufferedReader bf = new BufferedReader(new InputStreamReader(System.in));
+                while (true) {
+                    String s = null;
+                    try {
+                        s = bf.readLine();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    try {
+                        int id = Integer.parseInt(s);
+                        synchronized (deathList) {
+                            clients.forEach(handler -> {
+                                if (handler.getUser().getId() == id) {
+                                    handler.interrupt();
+                                    banList.add(handler.s.getInetAddress());
+                                    System.out.println(handler.s.getInetAddress());
+                                    try {
+                                        handler.out.write(Server.BAN_SIGNAL);
+                                        handler.s.close();
+                                    } catch (IOException e) {
+                                        e.printStackTrace();
+                                    }
+                                }
+                            });
+                            deathList.add(id);
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+            });
+            banThread.setDaemon(true);
+            banThread.start();
             ServerSocket ss = new ServerSocket(port);
             while (true) {
                 Socket s = ss.accept();
+                final boolean[] banned = {false};
+                banList.forEach(addr -> {
+                    if (addr.equals(s.getInetAddress())) banned[0] = true;
+                });
+                if (banned[0]) continue;
                 Handler h = new Handler(s, idCounter);
                 h.start();
                 idCounter++;
@@ -171,7 +216,7 @@ public class Server extends Thread {
         public void run() {
             while (alive) {
                 try {
-                    byte kbEvent = (byte) (readKBEvent() & 0b11111011);
+                    byte kbEvent = readKBEvent();
                     if (kbEvent == DEATH_SIGNAL) {
                         synchronized (deathList) {
                             deathList.add(user.getId());
@@ -181,14 +226,25 @@ public class Server extends Thread {
                         s.close();
                         return;
                     } else if (nextSignal.containsKey(user.getId())) {
+                        kbEvent = (byte) (kbEvent & 0b11111011);
                         LinkedList<Byte> sigList = nextSignal.get(user.getId());
                         if ((sigList.isEmpty() && user.getSnake().getLastSignal() != (byte) ((kbEvent & 0b01111111) | ((~kbEvent) & 0b10000000)))
                                 || (!sigList.isEmpty() && sigList.getLast() != (byte) ((kbEvent & 0b01111111) | ((~kbEvent) & 0b10000000))))
                             sigList.addLast(kbEvent);
-                        if (sigList.size() > UPDATE_SIGNAL) sigList.removeFirst();
+                        if (sigList.size() > 4) sigList.removeFirst();
                     }
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    synchronized (deathList) {
+                        deathList.add(user.getId());
+                    }
+                    try {
+                        in.close();
+                        out.close();
+                        s.close();
+                    } catch (IOException ioException) {
+                        ioException.printStackTrace();
+                    }
+                    return;
                 }
             }
         }

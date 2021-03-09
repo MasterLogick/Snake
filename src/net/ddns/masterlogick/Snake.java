@@ -90,6 +90,7 @@ public class Snake {
     public boolean contains(int x, int y) {
         Point current = new Point(start);
         Point dst = new Point(x, y);
+        if (current.x == dst.x && current.y == dst.y) return true;
         for (byte b : turns) {
             add(current, (byte) ((b & 0b01111111) | ((~b) & 0b10000000)));
             if (dst.x == current.x && dst.y == current.y)

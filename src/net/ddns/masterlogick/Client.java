@@ -71,8 +71,10 @@ public class Client extends Thread {
     }
 
     public void sendKBEvent(int event) throws IOException {
-        out.write((byte) event);
-        out.flush();
+        if (!s.isClosed()) {
+            out.write((byte) event);
+            out.flush();
+        }
     }
 
     @Override
@@ -116,6 +118,11 @@ public class Client extends Thread {
                     case Server.APPLE_SIGNAL: {
                         f.setApple(new Point(readInt(), readInt()));
                     }
+                    case Server.BAN_SIGNAL:
+                        in.close();
+                        out.close();
+                        onDeath.apply(null);
+                        return;
                 }
             }
         } catch (IOException e) {
