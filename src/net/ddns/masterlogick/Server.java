@@ -29,15 +29,18 @@ public class Server extends Thread {
     Vector<Handler> clients = new Vector<>();
     HashMap<Integer, LinkedList<Byte>> nextSignal = new HashMap<>();
     private int idCounter = 0;
-    private Point apple;
+    private final Point[] apples;
 
-    public Server(int port, int rows, int columns, int ups) {
+    public Server(int port, int rows, int columns, int ups, int apples) {
         this.port = port;
         this.rows = rows;
         this.columns = columns;
         this.ups = ups;
         setName("Server-Thread");
-        apple = new Point(r.nextInt(rows), r.nextInt(columns));
+        this.apples = new Point[apples];
+        for (int i = 0; i < apples; i++) {
+            this.apples[i] = new Point(r.nextInt(rows), r.nextInt(columns));
+        }
     }
 
     @Override
@@ -63,7 +66,7 @@ public class Server extends Thread {
                                     signal = nextSig;
                                 }
                                 update.putInt(h.user.getId());
-                                byte upd = s.go(signal, rows, columns, apple);
+                                byte upd = s.go(signal, rows, columns, apples);
                                 updateApple = updateApple || ((upd & 0b100) != 0);
                                 update.put(upd);
                                 AtomicBoolean intersect = new AtomicBoolean(false);
@@ -77,13 +80,23 @@ public class Server extends Thread {
                                 }
                             } else deathList.add(h.user.getId());
                         }
-                        if (updateApple) apple = new Point(r.nextInt(rows), r.nextInt(columns));
+
+                        if (updateApple) {
+                            for (int i = 0; i < apples.length; i++) {
+                                int finalI = i;
+                                clients.forEach(handler -> {
+                                    if (handler.getUser().getSnake().contains(apples[finalI].x, apples[finalI].y)) {
+                                        apples[finalI] = new Point(r.nextInt(rows), r.nextInt(columns));
+                                    }
+                                });
+                            }
+                        }
                         ArrayList<Integer> disconnected = new ArrayList<>();
                         for (Handler handler : clients) {
                             if (!handler.s.isClosed()) {
                                 try {
                                     handler.sendUpdate(update, deathList);
-                                    if (updateApple) handler.sendAppleUpdateSignal(apple);
+                                    if (updateApple) handler.sendAppleUpdateSignal(apples);
                                 } catch (IOException e) {
                                     disconnected.add(handler.getUser().getId());
                                 }
@@ -189,8 +202,11 @@ public class Server extends Thread {
                 writeInt(user.getId());
                 writeInt(rows);
                 writeInt(columns);
-                writeInt(apple.x);
-                writeInt(apple.y);
+                writeInt(apples.length);
+                for (int i = 0; i < apples.length; i++) {
+                    writeInt(apples[i].x);
+                    writeInt(apples[i].y);
+                }
                 out.flush();
                 user.getSnake().sendToStream(out);
                 log.log(Level.INFO, "New user connected: " + s.getInetAddress() + " " + user.toString());
@@ -290,11 +306,13 @@ public class Server extends Thread {
             out.write(ByteBuffer.allocate(Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN).putInt(i).array());
         }
 
-        public void sendAppleUpdateSignal(Point apple) throws IOException {
+        public void sendAppleUpdateSignal(Point[] apples) throws IOException {
             synchronized (outWriteLocker) {
                 out.write(APPLE_SIGNAL);
-                writeInt(apple.x);
-                writeInt(apple.y);
+                for (int i = 0; i < apples.length; i++) {
+                    writeInt(apples[i].x);
+                    writeInt(apples[i].y);
+                }
                 out.flush();
             }
         }

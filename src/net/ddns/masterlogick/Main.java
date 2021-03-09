@@ -10,13 +10,13 @@ import java.util.function.Function;
 public class Main {
     public static void main(String[] args) {
         if (args.length == 1 && args[0].equals("--test")) {
-            startServer(1555, 100, 100, 1);
+            startServer(1555, 100, 100, 1, 3);
             startClient("127.0.0.1", 1555, Color.RED);
             startClient("127.0.0.1", 1555, Color.BLUE);
-        } else if (args.length == 5 && args[0].equals("--dedicated-server"))
-            startServer(Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]), Integer.parseInt(args[4]));
+        } else if (args.length == 6 && args[0].equals("--dedicated-server"))
+            startServer(Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]), Integer.parseInt(args[4]), Integer.parseInt(args[5]));
         else if (args.length > 0 && args[0].equals("--dedicated-server")) {
-            System.out.println("Usage: java -jar Snake.jar --dedicated-server port width height ups");
+            System.out.println("Usage: java -jar Snake.jar --dedicated-server port width height ups apples");
         } else if (args.length == 1 && args[0].equals("--server")) {
             JFrame f = new JFrame("SNAAAAAAKE!!!-Server");
             f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -51,18 +51,25 @@ public class Main {
             root.add(p4);
             JPanel p5 = new JPanel();
             p5.setLayout(new BoxLayout(p5, BoxLayout.X_AXIS));
+            p5.add(new JLabel("Apples:"));
+            JTextField apples = new JTextField(6);
+            p5.add(apples);
+            root.add(p5);
+            JPanel p6 = new JPanel();
+            p6.setLayout(new BoxLayout(p6, BoxLayout.X_AXIS));
             JButton startButton = new JButton("Start server");
             startButton.addActionListener(e -> {
                 int portVal = Integer.parseInt(port.getText());
                 int widthVal = Integer.parseInt(width.getText());
                 int heightVal = Integer.parseInt(height.getText());
                 int upsVal = Integer.parseInt(ups.getText());
-                startServer(portVal, widthVal, heightVal, upsVal);
+                int app = Integer.parseInt(apples.getText());
+                startServer(portVal, widthVal, heightVal, upsVal, app);
                 startClient("127.0.0.1", portVal, jcc.getColor());
                 f.dispose();
             });
-            p5.add(startButton);
-            root.add(p5);
+            p6.add(startButton);
+            root.add(p6);
             f.setContentPane(root);
             f.pack();
             f.setResizable(false);
@@ -107,8 +114,8 @@ public class Main {
         }
     }
 
-    private static void startServer(int port, int width, int height, int ups) {
-        new Server(port, width, height, ups).start();
+    private static void startServer(int port, int width, int height, int ups, int apples) {
+        new Server(port, width, height, ups, apples).start();
     }
 
     private static void startClient(String address, int port, Color color) {

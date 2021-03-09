@@ -12,7 +12,7 @@ public class Field extends Canvas {
     private final int columns;
     private BufferedImage image;
     private Graphics2D g;
-    private Point apple;
+    private Point[] apples;
 
     public Field(int rows, int columns) {
         this.rows = rows;
@@ -35,8 +35,10 @@ public class Field extends Canvas {
         g.setColor(Color.RED);
         int squareWidth = (int) Math.ceil(((float) image.getWidth()) / columns);
         int squareHeight = (int) Math.ceil(((float) image.getHeight()) / rows);
-        g.fillRect((int) Math.floor(((float) image.getWidth() * apple.x) / columns), (int) Math.floor(((float) image.getHeight() * apple.y) / rows),
-                squareWidth, squareHeight);
+        for (int i = 0; i < apples.length; i++) {
+            g.fillRect((int) Math.floor(((float) image.getWidth() * apples[i].x) / columns), (int) Math.floor(((float) image.getHeight() * apples[i].y) / rows),
+                    squareWidth, squareHeight);
+        }
         snakes.values().forEach(snake -> snake.draw(g, rows, columns, image.getWidth(), image.getHeight()));
         gr.drawImage(image, 0, 0, null);
     }
@@ -58,12 +60,16 @@ public class Field extends Canvas {
         snakes.remove(id);
     }
 
-    public void setApple(Point apple) {
-        this.apple = apple;
+    public Point[] getApples() {
+        return apples;
     }
 
     @Override
     public Dimension getMinimumSize() {
         return new Dimension(100, 100);
+    }
+
+    public void setApples(Point[] apples) {
+        this.apples = apples;
     }
 }

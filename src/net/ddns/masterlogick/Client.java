@@ -19,6 +19,7 @@ public class Client extends Thread {
     private final Field f;
     private final int rows;
     private final int columns;
+    private final int apples;
     private final Socket s;
     private final Function<Void, Void> onDeath;
     private boolean alive = true;
@@ -33,8 +34,13 @@ public class Client extends Thread {
         id = readInt();
         rows = readInt();
         columns = readInt();
+        apples = readInt();
+        Point[] tmp = new Point[apples];
+        for (int i = 0; i < apples; i++) {
+            tmp[i] = new Point(readInt(), readInt());
+        }
         f = new Field(rows, columns);
-        f.setApple(new Point(readInt(), readInt()));
+        f.setApples(tmp);
         f.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -110,14 +116,19 @@ public class Client extends Thread {
                             byte change = (byte) in.read();
                             Snake s = f.getSnake(id);
                             if (s != null)
-                                s.go(change, rows, columns, new Point(0, 0));
+                                s.go(change, rows, columns, f.getApples());
                         }
                         SwingUtilities.updateComponentTreeUI(f);
                     }
                     break;
                     case Server.APPLE_SIGNAL: {
-                        f.setApple(new Point(readInt(), readInt()));
+                        Point[] tmp = new Point[apples];
+                        for (int i = 0; i < apples; i++) {
+                            tmp[i] = new Point(readInt(), readInt());
+                        }
+                        f.setApples(tmp);
                     }
+                    break;
                     case Server.BAN_SIGNAL:
                         in.close();
                         out.close();

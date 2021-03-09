@@ -44,12 +44,16 @@ public class Snake {
         p.y += i * ((b & 0b10) >> 1);
     }
 
-    public byte go(byte signal, int rows, int columns, Point apple) {
+    public byte go(byte signal, int rows, int columns, Point[] apples) {
         Point current = new Point(start);
         add(current, signal);
         if (current.x < rows && current.x >= 0 && current.y < columns && current.y >= 0 && !contains(current.x, current.y)) {
             turns.addFirst(signal);
-            if (!current.equals(apple) && ((signal & 0b100) == 0))
+            boolean ate = false;
+            for (int i = 0; i < apples.length; i++) {
+                if (current.equals(apples[i])) ate = true;
+            }
+            if (!ate && ((signal & 0b100) == 0))
                 turns.removeLast();
             else {
                 signal = (byte) (signal | 0b100);
